@@ -62,6 +62,16 @@ function rankFromXp(xp) {
     return null;
 }
 
+// קריאת raw body ב-Vercel
+async function getRawBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on('data', chunk => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+    });
+}
+
 export default async function handler(req, res) {
     // GET request
     if (req.method === "GET") {
@@ -70,44 +80,47 @@ export default async function handler(req, res) {
 
     // POST request (Discord interactions)
     if (req.method === "POST") {
-        // קריאת ה-raw body
-        let body;
-        if (Buffer.isBuffer(req.body)) {
-            body = req.body;
-        } else if (typeof req.body === 'string') {
-            body = Buffer.from(req.body, 'utf8');
-        } else {
-            body = Buffer.from(JSON.stringify(req.body), 'utf8');
+        try {
+            // קריאת ה-raw body ישירות מה-stream
+            // זה חשוב כי Discord צריך את ה-raw body לאימות החתימה
+            const rawBody = await getRawBody(req);
+
+            // אימות חתימה - חשוב: צריך להשתמש ב-raw body המקורי
+            const signature = req.headers["x-signature-ed25519"];
+            const timestamp = req.headers["x-signature-timestamp"];
+            const publicKey = mustGet("DISCORD_PUBLIC_KEY");
+
+            if (!signature || !timestamp) {
+                return res.status(401).send("Missing signature headers");
+            }
+
+            const isValid = verifyKey(rawBody, signature, timestamp, publicKey);
+            if (!isValid) {
+                return res.status(401).send("Bad signature");
+            }
+
+            // Parse interaction
+            const interaction = JSON.parse(rawBody.toString('utf8'));
+
+            // PING - Discord בודק את זה לאימות ה-endpoint
+            if (interaction.type === 1) {
+                return res.status(200).json({ type: 1 });
+            }
+
+            // Slash command
+            if (interaction.type === 2 && interaction.data?.name === "what-legend") {
+                const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
+                const rank = rankFromXp(Number(xp));
+                const content = rank || "Invalid XP value";
+                return res.status(200).json({ type: 4, data: { content } });
+            }
+
+            return res.status(200).json({ type: 4, data: { content: "Unsupported interaction" } });
+        } catch (error) {
+            console.error("Error handling Discord interaction:", error);
+            return res.status(500).send("Internal server error");
         }
-
-        // אימות חתימה
-        const signature = req.headers["x-signature-ed25519"];
-        const timestamp = req.headers["x-signature-timestamp"];
-        const publicKey = mustGet("DISCORD_PUBLIC_KEY");
-
-        const isValid = verifyKey(body, signature, timestamp, publicKey);
-        if (!isValid) {
-            return res.status(401).send("Bad signature");
-        }
-
-        // Parse interaction
-        const interaction = JSON.parse(body.toString("utf8"));
-
-        // PING
-        if (interaction.type === 1) {
-            return res.json({ type: 1 });
-        }
-
-        // Slash command
-        if (interaction.type === 2 && interaction.data?.name === "what-legend") {
-            const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
-            const rank = rankFromXp(Number(xp));
-            const content = rank || "Invalid XP value";
-            return res.json({ type: 4, data: { content } });
-        }
-
-        return res.json({ type: 4, data: { content: "Unsupported interaction" } });
     }
 
     return res.status(405).send("Method not allowed");
-}
+};
