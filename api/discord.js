@@ -75,7 +75,7 @@ function rankFromXp(xp) {
     return null;
 }
 
-app.post("/api/discord", (req, res) => {
+app.post("/", (req, res) => {
     if (!verifyDiscord(req)) return res.status(401).send("Bad signature");
 
     const interaction = JSON.parse(req.body.toString("utf8"));
