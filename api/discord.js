@@ -115,13 +115,25 @@ export default async function handler(req, res) {
 
             // Slash command
             if (interaction.type === 2 && interaction.data?.name === "what-legend") {
+                const callerId =
+                    interaction?.member?.user?.id ||
+                    interaction?.user?.id;
+
+                // התייחסות ספציפית לאורל
+                const SPECIAL_USER_ID = "1092705612485361674";
+
                 const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
                 const rank = rankFromXp(Number(xp));
                 if (!rank) {
                     return res.status(200).json({ type: 4, data: { content: "Invalid XP value" } });
                 }
                 const formattedXp = formatNumber(Number(xp));
-                const content = `${formattedXp} is ${rank}`;
+
+                let content = `${formattedXp} is ${rank}`;
+                if (callerId === SPECIAL_USER_ID) {
+                    content = "אורל יאפס אתה לא יכול להשתמש בבוט הזה";
+                }
+
                 return res.status(200).json({ type: 4, data: { content } });
             }
 
