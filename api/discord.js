@@ -96,5 +96,7 @@ app.post("/", (req, res) => {
     return res.json({ type: 4, data: { content: "Unsupported interaction" } });
 });
 
+app.get("/", (req, res) => res.status(200).send("Discord Bot is running properly!"));
+
 // חשוב: export default handler ל-Vercel
 export default app;
