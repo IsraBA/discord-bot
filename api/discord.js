@@ -1,4 +1,5 @@
 // api/discord.js
+import 'dotenv/config';
 import { verifyKey } from "discord-interactions";
 
 function mustGet(name) {
@@ -62,6 +63,10 @@ function rankFromXp(xp) {
     return null;
 }
 
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 // קריאת raw body ב-Vercel
 async function getRawBody(req) {
     return new Promise((resolve, reject) => {
@@ -112,7 +117,11 @@ export default async function handler(req, res) {
             if (interaction.type === 2 && interaction.data?.name === "what-legend") {
                 const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
                 const rank = rankFromXp(Number(xp));
-                const content = rank || "Invalid XP value";
+                if (!rank) {
+                    return res.status(200).json({ type: 4, data: { content: "Invalid XP value" } });
+                }
+                const formattedXp = formatNumber(Number(xp));
+                const content = `${formattedXp} is ${rank}`;
                 return res.status(200).json({ type: 4, data: { content } });
             }
 
