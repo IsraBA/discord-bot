@@ -99,4 +99,7 @@ app.post("/", (req, res) => {
 app.get("/", (req, res) => res.status(200).send("Discord Bot is running properly!"));
 
 // חשוב: export default handler ל-Vercel
-export default app;
+// Vercel מצפה ל-handler function, לא ל-Express app ישירות
+export default (req, res) => {
+    return app(req, res);
+};
