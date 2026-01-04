@@ -130,9 +130,9 @@ export default async function handler(req, res) {
                 const formattedXp = formatNumber(Number(xp));
 
                 let content = `${formattedXp} is ${rank}`;
-                if (callerId === SPECIAL_USER_ID) {
-                    content = "אורל יאפס אתה לא יכול להשתמש בבוט הזה";
-                }
+                // if (callerId === SPECIAL_USER_ID) {
+                //     content = "אורל יאפס אתה לא יכול להשתמש בבוט הזה";
+                // }
 
                 return res.status(200).json({ type: 4, data: { content } });
             }
