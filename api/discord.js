@@ -94,7 +94,8 @@ export default async function handler(req, res) {
                 return res.status(401).send("Missing signature headers");
             }
 
-            const isValid = verifyKey(rawBody, signature, timestamp, publicKey);
+            const isValid = await verifyKey(rawBody, signature, timestamp, publicKey);
+
             if (!isValid) {
                 return res.status(401).send("Bad signature");
             }
