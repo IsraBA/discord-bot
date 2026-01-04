@@ -1,23 +1,10 @@
 // api/discord.js
-import express from "express";
 import { verifyKey } from "discord-interactions";
-
-const app = express();
-
-// חובה: Discord צריך את ה-raw body כדי לאמת חתימה
-app.use(express.raw({ type: "*/*" }));
 
 function mustGet(name) {
     const v = process.env[name];
     if (!v) throw new Error(`Missing env var: ${name}`);
     return v;
-}
-
-function verifyDiscord(req) {
-    const signature = req.header("x-signature-ed25519");
-    const timestamp = req.header("x-signature-timestamp");
-    const publicKey = mustGet("DISCORD_PUBLIC_KEY");
-    return verifyKey(req.body, signature, timestamp, publicKey);
 }
 
 const RANKS = [
@@ -56,7 +43,7 @@ const RANKS = [
 
 function rankFromXp(xp) {
     if (!Number.isFinite(xp) || xp < 0) return null;
-    
+
     // Legend ranks (>= 1,600,000)
     if (xp >= 1_600_000) {
         const base = 1_600_000;
@@ -64,42 +51,63 @@ function rankFromXp(xp) {
         const legendNum = Math.floor((xp - base) / step) + 1;
         return `Legend ${legendNum}`;
     }
-    
+
     // Regular ranks (< 1,600,000)
     for (let i = RANKS.length - 1; i >= 0; i--) {
         if (xp >= RANKS[i].xp) {
             return RANKS[i].name;
         }
     }
-    
+
     return null;
 }
 
-app.post("/", (req, res) => {
-    if (!verifyDiscord(req)) return res.status(401).send("Bad signature");
-
-    const interaction = JSON.parse(req.body.toString("utf8"));
-
-    // PING
-    if (interaction.type === 1) return res.json({ type: 1 });
-
-    // Slash command
-    if (interaction.type === 2 && interaction.data?.name === "what-legend") {
-        const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
-        const rank = rankFromXp(Number(xp));
-
-        const content = rank || "Invalid XP value";
-
-        return res.json({ type: 4, data: { content } });
+export default async function handler(req, res) {
+    // GET request
+    if (req.method === "GET") {
+        return res.status(200).send("Discord Bot is running properly!");
     }
 
-    return res.json({ type: 4, data: { content: "Unsupported interaction" } });
-});
+    // POST request (Discord interactions)
+    if (req.method === "POST") {
+        // קריאת ה-raw body
+        let body;
+        if (Buffer.isBuffer(req.body)) {
+            body = req.body;
+        } else if (typeof req.body === 'string') {
+            body = Buffer.from(req.body, 'utf8');
+        } else {
+            body = Buffer.from(JSON.stringify(req.body), 'utf8');
+        }
 
-app.get("/", (req, res) => res.status(200).send("Discord Bot is running properly!"));
+        // אימות חתימה
+        const signature = req.headers["x-signature-ed25519"];
+        const timestamp = req.headers["x-signature-timestamp"];
+        const publicKey = mustGet("DISCORD_PUBLIC_KEY");
 
-// חשוב: export default handler ל-Vercel
-// Vercel מצפה ל-handler function, לא ל-Express app ישירות
-export default (req, res) => {
-    return app(req, res);
-};
+        const isValid = verifyKey(body, signature, timestamp, publicKey);
+        if (!isValid) {
+            return res.status(401).send("Bad signature");
+        }
+
+        // Parse interaction
+        const interaction = JSON.parse(body.toString("utf8"));
+
+        // PING
+        if (interaction.type === 1) {
+            return res.json({ type: 1 });
+        }
+
+        // Slash command
+        if (interaction.type === 2 && interaction.data?.name === "what-legend") {
+            const xp = interaction.data.options?.find(o => o.name === "xp")?.value;
+            const rank = rankFromXp(Number(xp));
+            const content = rank || "Invalid XP value";
+            return res.json({ type: 4, data: { content } });
+        }
+
+        return res.json({ type: 4, data: { content: "Unsupported interaction" } });
+    }
+
+    return res.status(405).send("Method not allowed");
+}
